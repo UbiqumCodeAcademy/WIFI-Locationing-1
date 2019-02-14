@@ -24,16 +24,6 @@ vd <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc
 notworking_waps <- which(apply(td [,1:520], 2, function(x) mean(x)) == 100)
 tdwaps <- td [,-c(notworking_waps)]
 
-tdwaps[, 1:465] <- as.data.frame(apply(tdwaps[, 1:465], 2, function(x) {ifelse(x==100, -104,x)}))
-
-WAP <- grep("WAP", names(tdwaps), value = T)
-
-tdwaps$maxWAP <- apply(tdwaps[WAP], 1, which.max)
-
-list(tdwaps$maxWAP)
-
-summary(tdwaps$maxWAP)  
-
 
 #### 3- Convert Variables #### 
 
@@ -45,30 +35,55 @@ td$USERID <- as.factor(td$USERID)
 td$PHONEID <- as.factor(td$PHONEID)
 td$TIMESTAMP <- as.POSIXct(as.numeric(td$TIMESTAMP), origin = '1970-01-01')
 
-#### 4- Convert from wide to long ####
 
-train <- melt(td, id.vars = c(521:529))
+#### 4- Creating a new column w/ strongest WAP on the row ####
+
+tdwaps[, 1:465] <- as.data.frame(apply(tdwaps[, 1:465], 2, function(x) {ifelse(x==100, -100,x)}))
+
+tdwaps <- filter(tdwaps, USERID != 6)
+
+WAP <- grep("WAP", names(tdwaps), value = T)
+
+tdwaps$maxWAP <- apply(tdwaps[WAP], 1, which.max)
+
+tdwaps$lengthwap <- apply(tdwaps [,1:465], 1, function(x) length(x))
+
+#### 5- Convert from wide to long for visualization ####
+
+lttd <- melt(td, id.vars = c(521:529))
 traincomplete <-melt(td, id.vars = c(521:529))
-train <- train[,c(10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
-train <- filter(train, value != 100)
-summary(train)
+lttd <- lttd[,c(10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
+lttd <- filter(lttd, value != 100)
+lttd <- filter(lttd, USERID != 6)
+summary(lttd)
 
 test <- melt(vd, id.vars = c(521:529))
 test <-  test[,c(10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
 test <- filter(test, value != 100)
 
+#### 6- Plots and visualization ####
 
-#### 6- Plots ####
-
-ggplot(td, aes(x=USERID, y= (apply(td [,1:520], 2, function(x) sum(x)))))+
-  geom_bar(stat = "identity", colour= "blue")
-
-ggplot(closeWAPS, aes(x=PHONEID, y= abs(value)))+
+ggplot(lttd, aes(x=USERID, y= abs(value)))+
   geom_bar(stat = "identity", colour = "green")
 
 ggplot(closeWAPS, aes(x=RELATIVEPOSITION, y= abs(value)))+
   geom_bar(stat = "identity", colour = "red")
 
+ggplot(data = train) +
+  aes(x = value, fill = FLOOR) +
+  geom_histogram(bins = 30) +
+  labs(title = "Distribution of WAPS per Building",
+       subtitle = "On Train") +
+  theme_minimal() +
+  facet_wrap(vars(BUILDINGID))
+
+ggplot(data = tdwaps) +
+  aes(x = maxWAP, fill = FLOOR) +
+  geom_histogram(bins = 30) +
+  labs(title = "Distribution of WAPS per Building",
+       subtitle = "On Train") +
+  theme_minimal() +
+  facet_wrap(vars(BUILDINGID))
 
 plot1 <- plot_ly(train, x= ~LATITUDE, 
                  y = ~LONGITUDE, 
@@ -110,7 +125,6 @@ plot2 <- plot_ly(closeWAPS, x= ~LATITUDE,
            showarrow = FALSE
          ))
 plot2
-
 
 plot(LATITUDE ~ LONGITUDE, data = closeWAPS, pch = 20, col = "cyan")
 
