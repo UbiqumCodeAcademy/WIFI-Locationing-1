@@ -6,22 +6,33 @@ pacman:: p_load(pacman,
                 reshape2, 
                 dplyr, 
                 ggplot2,
-                ggmap
-                )
+                ggmap, 
+                plotly, 
+                randomForest, 
+                caret, 
+                viridis, 
+                cowplot
+)
 #### 2- Load Data Sets ####
 
 td <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/trainingData.csv")
 vd <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/validationData.csv")
 
-plot(td$LATITUDE, td$LONGITUDE)
-plot(vd$LATITUDE, vd$LONGITUDE)
 
 #### 2.1- Deleting WAPS that are useless (=100) ####
 
 notworking_waps <- which(apply(td [,1:520], 2, function(x) mean(x)) == 100)
-working_waps <- td [,-c(notworking_waps)]
+tdwaps <- td [,-c(notworking_waps)]
 
-apply(working_waps [, 1:465], 2, FUN = mean)
+tdwaps[, 1:465] <- as.data.frame(apply(tdwaps[, 1:465], 2, function(x) {ifelse(x==100, -104,x)}))
+
+WAP <- grep("WAP", names(tdwaps), value = T)
+
+tdwaps$maxWAP <- apply(tdwaps[WAP], 1, which.max)
+
+list(tdwaps$maxWAP)
+
+summary(tdwaps$maxWAP)  
 
 
 #### 3- Convert Variables #### 
@@ -37,6 +48,7 @@ td$TIMESTAMP <- as.POSIXct(as.numeric(td$TIMESTAMP), origin = '1970-01-01')
 #### 4- Convert from wide to long ####
 
 train <- melt(td, id.vars = c(521:529))
+traincomplete <-melt(td, id.vars = c(521:529))
 train <- train[,c(10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
 train <- filter(train, value != 100)
 summary(train)
@@ -45,108 +57,10 @@ test <- melt(vd, id.vars = c(521:529))
 test <-  test[,c(10, 11, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
 test <- filter(test, value != 100)
 
-### So, where are the actual routers? ###
-closeWAPS <- filter(train, value > -67)
-plot(closeWAPS$LONGITUDE, closeWAPS$LATITUDE)
 
-#### 5- Separate Strong Signal WorkingWAPs data by building ####
-#BL 0
-closewaps_bld0 <- filter(closeWAPS, BUILDINGID == 0)
+#### 6- Plots ####
 
-#BL 1
-closewaps_bld1 <- filter(working_waps, BUILDINGID == 1)
-
-#BL2
-closewaps_bld2 <- filter(working_waps, BUILDINGID == 2)
-
-##PLOTS
-
-plot(closewaps_bld0$LATITUDE, closewaps_bld0$LONGITUDE)
-plot(closewaps_bld1$LATITUDE, closewaps_bld1$LONGITUDE)
-plot(closewaps_bld2$LATITUDE, closewaps_bld2$LONGITUDE)
-
-#### 5.1- Break it dowm per floor (0,1,2,3,4) ####
-
-#Floor 0
-closewaps_bld0_fl0 <- filter(closewaps_bld0, FLOOR == 0)
-plot(closewaps_bld0_fl0$LATITUDE, closewaps_bld0_fl0$LONGITUDE)
-
-#Floor 1
-closewaps_bld0_fl1 <- filter(closewaps_bld0, FLOOR == 1)
-plot(closewaps_bld0_fl1$LATITUDE, closewaps_bld0_fl1$LONGITUDE)
-
-#Floor 2
-closewaps_bld0_fl2 <- filter(closewaps_bld0, FLOOR == 2)
-plot(closewaps_bld0_fl2$LATITUDE, closewaps_bld0_fl2$LONGITUDE)
-
-#Floor 3
-closewaps_bld0_fl3 <- filter(closewaps_bld0, FLOOR == 3)
-plot(closewaps_bld0_fl3$LATITUDE, closewaps_bld0_fl3$LONGITUDE)
-
-#Floor 4
-closewaps_bld0_fl4 <- filter(closewaps_bld0, FLOOR == 4)
-plot(closewaps_bld0_fl4$LATITUDE, closewaps_bld0_fl4$LONGITUDE)
-#Aqui me sale entonces que no hay WAPs, pero hago un list y me dice que si...
-
-
-#### 5- Separate WorkingWAPs data by building ####
-#BL 0
-bld0 <- filter(working_waps, BUILDINGID == 0)
-
-#BL 1
-bld1 <- filter(working_waps, BUILDINGID == 1)
-
-#BL2
-bld2 <- filter(working_waps, BUILDINGID == 2)
-
-##PLOTS
-
-plot(bld0$LATITUDE, bld0$LONGITUDE)
-plot(bld1$LATITUDE, bld1$LONGITUDE)
-plot(bld2$LATITUDE, bld2$LONGITUDE)
-
-#### 5.1- Break it dowm per floor (0,1,2,3,4) ####
-
-#Floor 0
-bld0_fl0 <- filter(bld0, FLOOR == 0)
-
-#Floor 1
-bld0_fl1 <- filter(bld0, FLOOR == 1)
-plot(bld0_fl1$LATITUDE, bld0_fl1$LONGITUDE)
-
-#Floor 2
-bld0_fl2 <- filter(bld0, FLOOR == 2)
-plot(bld0_fl2$LATITUDE, bld0_fl2$LONGITUDE)
-
-#Floor 3
-bld0_fl3 <- filter(bld0, FLOOR == 3)
-plot(bld0_fl3$LATITUDE, bld0_fl3$LONGITUDE)
-
-#Floor 4
-bld0_fl4 <- filter(bld0, FLOOR == 4)
-plot(bld0_fl4$LATITUDE, bld0_fl4$LONGITUDE) 
-#Aqui me sale entonces que no hay WAPs, pero hago un list y me dice que si...
-
-
-#### 6- Create a data frame for each feature PER building (WORKING WAPS) ####
-
-#Building 0
-bld0_lat <- data.frame(bld0$LATITUDE, bld0[,1:465])
-bld0_lon <- data.frame(bld0$LONGITUDE, bld0[, 1:465])
-bld0_floor <- data.frame(bld0$FLOOR, bld0[, 1:465])
-
-#Building 1
-bld1_lat <- data.frame(bld1$LATITUDE, bld1[,1:465])
-bld1_lon <- data.frame(bld1$LONGITUDE, bld1[, 1:465])
-bld1_floor <- data.frame(bld1$FLOOR, bld1[, 1:465])
-
-#Building 2
-bld2_lat <- data.frame(bld2$LATITUDE, bld2[,1:465])
-bld2_lon <- data.frame(bld2$LONGITUDE, bld2[, 1:465])
-bld2_floor <- data.frame(bld2$FLOOR, bld2[, 1:465])
-
-
-ggplot(closeWAPS, aes(x=USERID, y=abs(value)))+
+ggplot(td, aes(x=USERID, y= (apply(td [,1:520], 2, function(x) sum(x)))))+
   geom_bar(stat = "identity", colour= "blue")
 
 ggplot(closeWAPS, aes(x=PHONEID, y= abs(value)))+
@@ -155,15 +69,105 @@ ggplot(closeWAPS, aes(x=PHONEID, y= abs(value)))+
 ggplot(closeWAPS, aes(x=RELATIVEPOSITION, y= abs(value)))+
   geom_bar(stat = "identity", colour = "red")
 
-closeWAPS_inside <- filter(closeWAPS, RELATIVEPOSITION==1)
-plot(closeWAPS_inside$LATITUDE, closeWAPS_inside$LONGITUDE)
 
-insidewaps <- filter(train, RELATIVEPOSITION==1)
-plot(insidewaps$LATITUDE, insidewaps$LONGITUDE) 
+plot1 <- plot_ly(train, x= ~LATITUDE, 
+                 y = ~LONGITUDE, 
+                 z = ~FLOOR, 
+                 marker = list(color = ~ value, 
+                               colourscale = "earth", 
+                               showscale = TRUE)) %>%
+  add_markers()%>%
+  layout(scene = list(xaxis = list(title = 'Latitude'),
+                      yaxis = list(title = 'Longitude'),
+                      zaxis = list(title = 'Floor')),
+         annotations = list(
+           x = 1.13,
+           y = 1.05,
+           text = 'WAPS Strength ',
+           xref = 'paper',
+           yref = 'paper',
+           showarrow = FALSE
+         ))
+
+plot1
+
+plot2 <- plot_ly(closeWAPS, x= ~LATITUDE, 
+                 y = ~LONGITUDE, 
+                 z = ~FLOOR, 
+                 marker = list(color = ~ value, 
+                               colourscale = "earth", 
+                               showscale = TRUE)) %>%
+  add_markers()%>%
+  layout(scene = list(xaxis = list(title = 'Latitude'),
+                      yaxis = list(title = 'Longitude'),
+                      zaxis = list(title = 'Floor')),
+         annotations = list(
+           x = 1.13,
+           y = 1.05,
+           text = 'WAPS Strength ',
+           xref = 'paper',
+           yref = 'paper',
+           showarrow = FALSE
+         ))
+plot2
 
 
-ggplot(closewaps_bld0_fl0, aes(x=LATITUDE, y= LONGITUDE))+
-  geom_point(colour= "red")
+plot(LATITUDE ~ LONGITUDE, data = closeWAPS, pch = 20, col = "cyan")
 
-list(closeWAPS$PHONEID)
+#### 8- Sampling ####
+
+sample1 <- td %>% group_by(BUILDINGID, FLOOR) %>% sample_n(30)
+
+table(sample1$FLOOR)
+table(sample1$BUILDINGID)
+
+b0 <- filter(sample1, BUILDINGID == 0)
+
+plotsample1 <- plot_ly(sample1, x= ~LONGITUDE, 
+                 y = ~LATITUDE, 
+                 z = ~FLOOR, 
+                 type = "scatter3d", 
+                 mode = "markers", 
+                 color = ~BUILDINGID)
+plotsample1
+
+
+plotb0 <- plot_ly(b0, 
+                  x= ~LONGITUDE, 
+                  y = ~LATITUDE, 
+                  z = ~FLOOR, 
+                  type = "scatter3d", 
+                  mode = "markers", 
+                  color = ~FLOOR)
+plotb0
+
+#### 8- Modeling ####
+
+wap1s <- grep("WAP", names(sample1), value = T)
+
+# Get the best mtry
+besmtry_rf <- tuneRF(sample1[wap1s], 
+                     sample1$LONGITUDE, 
+                     ntreeTry = 100, 
+                     stepFactor = 2, 
+                     improve = 0.05,
+                     trace = TRUE, 
+                     plot = T)
+
+# Train a random forest using that mtry
+system.time(rf1 <- randomForest(y=sample1$LONGITUDE, 
+                                x=sample1[wap1s], 
+                                importance = T, 
+                                method ="rf", 
+                                ntree = 100, 
+                                mtry = 44))
+
+# Train a random forest using caret package
+system.time(rf1_caret <- train(y=sample1$LONGITUDE, 
+                                      x= sample1[wap1s], 
+                                      data = sample1, 
+                                      method = "rf", 
+                                      ntree = 100, 
+                                      tuneGrid = expand.grid(.mtry = 44)))
+
 
