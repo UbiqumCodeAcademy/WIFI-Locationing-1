@@ -17,7 +17,9 @@ pacman:: p_load(pacman,
                 e1071,
                 class, 
                 kknn,
-                gbts
+                gbts,
+                Metrics,
+                dummyVars
 )
 ####Parallel processing####
 # getDoParWorkers()
@@ -105,6 +107,7 @@ trainWAP <- trainWAP [, -(317:321)]
 validationWAP <- validationWAP[, -(317:321)]
 names(trainWAP)
 names(validationWAP)
+
 #### 5- Convert from wide to long for visualization ####
 
 #Test
@@ -378,13 +381,14 @@ save(RFbuildingpred, file = "RF_PREDICTION_BLDG.rda")
 RFbuildingpred 
 validationWAP2 <- validationWAP
 validationWAP2$BUILDINGID <-RFbuildingpred
-
+validationWAP2 <- validationWAP2[, -c(313, 314)]
+names(validationWAP2)
 
 ### Create new TRAIN DATA FRAME for predicting FLOOR that included BUILDING and FLOOR
-trainWAPFLOOR <- trainWAP[, c(1:312, 315, 316)]
+trainWAPFLOOR <- trainWAP[, -c(313, 314)]
 names(trainWAPFLOOR)
 
-WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
+WAPSFLOOR <- grep("WAP", names(trainWAPFLOOR), value = T)
 set.seed(123)
 
 #### 8.2 FLOOR ####
@@ -393,7 +397,7 @@ set.seed(123)
 # Accuracy     Kappa 
 # 0.9000900 0.8600066 
 #Best mtry = 34
-besmtry_rf <- tuneRF(trainWAPFLOOR[WAPS], 
+besmtry_rf <- tuneRF(trainWAPFLOOR[WAPSFLOOR], 
                      trainWAPFLOOR$FLOOR,
                      stepFactor = 2, 
                      improve = TRUE,
@@ -402,7 +406,7 @@ besmtry_rf <- tuneRF(trainWAPFLOOR[WAPS],
 
 # Train a random forest mtry = 34
 #463 seconds
-system.time(rf_floor <- randomForest(x = trainWAPFLOOR[WAPS],
+system.time(rf_floor <- randomForest(x = trainWAPFLOOR[WAPSFLOOR],
                                         y = trainWAPFLOOR$FLOOR,
                                         data = trainWAPFLOOR, 
                                         importance = TRUE, 
@@ -426,14 +430,14 @@ confusionMatrix(RFfloorpred, validationWAP2$FLOOR)
 # 0.7902790 0.7146276 
 
 #STANDARIZE parameters from the dataset
-preprocessKNNfloor <- preProcess(trainWAPFLOOR[WAPS],method = c("center", "scale"))
-preprocessKNNfloorValidation <- preProcess(validationWAP2[WAPS], method = c("center", "scale"))
+preprocessKNNfloor <- preProcess(trainWAPFLOOR[WAPSFLOOR],method = c("center", "scale"))
+preprocessKNNfloorValidation <- preProcess(validationWAP2[WAPSFLOOR], method = c("center", "scale"))
 
-standarizedfloorWAPStd <- predict(preprocessKNNfloor, trainWAPFLOOR[WAPS])
-standarizedfloorWAPSvd <- predict(preprocessKNNfloorValidation, validationWAP2[WAPS])
+standarizedfloorWAPStd <- predict(preprocessKNNfloor, trainWAPFLOOR[WAPSFLOOR])
+standarizedfloorWAPSvd <- predict(preprocessKNNfloorValidation, validationWAP2[WAPSFLOOR])
 
-standFLOORtd <- cbind(standarizedfloorWAPStd , BUILDINGID =trainWAPFLOOR$BUILDINGID, FLOOR = trainWAPFLOOR$FLOOR)
-standFLOORvd <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID =validationWAP2$BUILDINGID, FLOOR = validationWAP2$FLOOR)
+standFLOORtd <- cbind(standarizedfloorWAPStd , BUILDINGID = trainWAPFLOOR$BUILDINGID, FLOOR = trainWAPFLOOR$FLOOR)
+standFLOORvd <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID = validationWAP2$BUILDINGID, FLOOR = validationWAP2$FLOOR)
 
 #Train KNN 
 system.time(knn_floor <- train.kknn(FLOOR~.,
@@ -475,13 +479,15 @@ save(RFfloorpred, file = "RF_PREDICTION_FLOOR.rda")
 #### 8.2.2 CREATE NEW VALIDATION DATA SET WITH PREDICTED FLOOR ####
 
 RFfloorpred 
-validationWAP2 <- validationWAP
-validationWAP2$BUILDINGID <-RFbuildingpred
+validationWAP3 <- validationWAP2
+validationWAP3$FLOOR <- RFfloorpred
+validationWAP3 <- validationWAP3[, - c(313)]
+names(validationWAP3)
 
 
 ### Create new TRAIN DATA FRAME for predicting FLOOR that included BUILDING and FLOOR
-trainWAPFLOOR <- trainWAP[, c(1:312, 315, 316)]
-names(trainWAPFLOOR)
+trainWAPLATITUDE <- trainWAP[, -c(313)]
+names(trainWAPLATITUDE)
 
 WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
 set.seed(123)
