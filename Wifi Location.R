@@ -16,10 +16,12 @@ pacman:: p_load(pacman,
                 doMC, 
                 e1071,
                 class, 
-                kknn
+                kknn,
+                gbts
 )
 ####Parallel processing####
-
+# getDoParWorkers()
+# makeCluster(3)
 registerDoMC(cores=4)
 
 #### 2- Load Data Sets ####
@@ -236,11 +238,11 @@ plot(LATITUDE ~ LONGITUDE, data = lttd, pch = 20, col = "cyan")
 
 #Test
 # Sampling n=60
-sample60 <- tdwaps %>% group_by(BUILDINGID, FLOOR) %>% sample_n(60)
+sample60 <- trainWAP %>% group_by(BUILDINGID, FLOOR) %>% sample_n(60)
 # Visualization
 table(sample60$FLOOR)
 table(sample60$BUILDINGID)
- 
+
 # Filter by building 
 sample60_b0 <- filter(sample60, BUILDINGID == 0)
 sample60_b1 <- dplyr::filter(sample60, BUILDINGID == 1)
@@ -250,22 +252,21 @@ sample60_b2 <- dplyr::filter(sample60, BUILDINGID == 2)
 
 a <- htmltools::tagList()
 
-for (i in unique(sample1$BUILDINGID)) {
-  a[[i]] <- sample1 %>% dplyr::filter(BUILDINGID == i)
-  %>% plot_ly(sample1, 
-              x = ~ LONGITUDE, 
-              y = ~ LATITUDE, 
-              z = ~ FLOOR, 
-              type = "scatter3d", 
-              mode = "markers")
+for (i in unique(sample60$BUILDINGID)) {
+  a[[i]] <- sample60 %>% dplyr::filter(BUILDINGID == i) %>% 
+    plot_ly( x = ~ LONGITUDE, 
+             y = ~ LATITUDE, 
+             z = ~ FLOOR, 
+             type = "scatter3d", 
+             mode = "markers")
 }
 
 plotsample60 <- plot_ly(sample60, x= ~LONGITUDE, 
-                 y = ~LATITUDE, 
-                 z = ~FLOOR, 
-                 type = "scatter3d", 
-                 mode = "markers", 
-                 color = ~BUILDINGID)
+                        y = ~LATITUDE, 
+                        z = ~FLOOR, 
+                        type = "scatter3d", 
+                        mode = "markers", 
+                        color = ~BUILDINGID)
 plotsample60
 
 plotb0 <- plot_ly(b0, 
@@ -290,9 +291,9 @@ set.seed(123)
 #### 8.1 BUILDING####
 # Get the best mtry / PREDICTING BUILDING
 #Random Forest
-#Accuracy    Kappa 
-#1        1
-#Best mtry = 34
+# Accuracy     Kappa 
+# 0.9990999 0.9985770
+#Best mtry = 
 besmtry_rf <- tuneRF(trainWAP[WAPS], 
                      trainWAP$BUILDINGID,
                      stepFactor = 2, 
@@ -300,22 +301,15 @@ besmtry_rf <- tuneRF(trainWAP[WAPS],
                      trace = TRUE, 
                      plot = T)
 
-# Train a random forest mtry = 34 
+# Train a random forest mtry = 9
 #142 seconds
-system.time(rf_building <- randomForest(BUILDINGID~., 
-                                data = trainWAP, 
-                                importance = TRUE, 
-                                do.trace = TRUE, 
-                                ntree = 100, 
-                                mtry = 34))
-
-
-# # Train a random forest using caret package - TOO LONG
-# system.time(rf_caret_building <- train(y=trainWAP$BUILDINGID, 
-#                                        x=trainWAP[WAPS], 
-#                                        method ="rf", 
-#                                        ntree = 100, 
-#                                        tuneGrid = expand.grid (.mtry = 34)))
+system.time(rf_building <- randomForest(x = trainWAP[WAPS],
+                                        y = trainWAP$BUILDINGID,
+                                        data = trainWAP, 
+                                        importance = TRUE, 
+                                        do.trace = TRUE, 
+                                        ntree = 20, 
+                                        mtry = 9))
 
 
 # RF - Building Prediction Model:
@@ -323,35 +317,176 @@ RFbuildingpred <- predict(rf_building, validationWAP)
 
 #Performance
 perfRFbuildingpred <- postResample(RFbuildingpred, validationWAP$BUILDINGID)
+
 #Confusion Matrix
 confusionMatrix(RFbuildingpred, validationWAP$BUILDINGID)
 
 #### KNN 
 # Accuracy     Kappa 
-#0.9945995 0.9914785 
-#calculate the pre-process parameters from the dataset
-preprocessParam <- preProcess(trainWAP[WAPS], 
-                              method = c("center", "scale"))
+#0.9693969 0.9520621 
+# 208 seconds
+
+#STANDARIZE parameters from the dataset
+preprocessKNNBuiLding <- preProcess(trainWAP[WAPS],method = c("center", "scale"))
+preprocessKNNBuildingValidation <- preProcess(validationWAP[WAPS], method = c("center", "scale"))
+
+standarizedKNNbldgWAPStd <- predict(preprocessKNNBuiLding, trainWAP[WAPS])
+standarizedKNNbldgWAPSvd <- predict(preprocessKNNBuildingValidation, validationWAP[WAPS])
+
+standKNNbldgTD <- cbind(standarizedKNNbldgWAPStd, BUILDINGID =trainWAP$BUILDINGID)
+standKNNbldgVD <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID =validationWAP$BUILDINGID)
 
 #Train KNN 
-system.time(knn_building <- train.kknn(BUILDINGID~., 
-                                       data = trainWAP,
+system.time(knn_building <- train.kknn(BUILDINGID~.,
+                                       data = standKNNbldgTD,
                                        kernel = "optimal",
                                        kmax = 10,
                                        scale = FALSE))
 
-# RF - Building Prediction Model:
-KNNbuildingpred <- predict(knn_building, validationWAP)
+# KNN- Building Prediction Model:
+KNNbuildingpred <- predict(knn_building, standKNNbldgVD)
 
 #Performance
-perfKNNbuildingpred <- postResample(KNNbuildingpred, validationWAP$BUILDINGID)
+perfKNNbuildingpred <- postResample(KNNbuildingpred, standKNNbldgVD$BUILDINGID)
 
 #Confusion Matrix
-confusionMatrix(KNNbuildingpred, validationWAP$BUILDINGID)
-#Dice que tiene que ser ambos del mismo tamanño
+confusionMatrix(KNNbuildingpred, standKNNbldgVD$BUILDINGID)
 
 ##SVM
-# system.time(svm_building <- svm())
+# Accuracy     Kappa 
+# 0.9486949 0.9197740 
+# 65 seconds
+system.time(svm_building <- train(BUILDINGID~., 
+                                  data = standKNNbldgTD, 
+                                  method = "svmLinear", 
+                                  trControl = trainControl(verboseIter = TRUE)))
+
+# SVM - Building Prediction Model:
+SVMbuildingpred <- predict(svm_building, standKNNbldgVD)
+
+#Performance
+perfSVMbuildingpred <- postResample(SVMbuildingpred, standKNNbldgVD$BUILDINGID)
+
+#Confusion Matrix
+confusionMatrix(SVMbuildingpred, standKNNbldgVD$BUILDINGID)
+
+#SAVE MODEL - RANDOM FOREST SELECTED 
+save(RFbuildingpred, file = "RF_PREDICTION_BLDG.rda")
+
+#### 8.1.2 CREATE NEW VALIDATION DATA SET WITH PREDICTED BUILDING ####
+
+RFbuildingpred 
+validationWAP2 <- validationWAP
+validationWAP2$BUILDINGID <-RFbuildingpred
+
+
+### Create new TRAIN DATA FRAME for predicting FLOOR that included BUILDING and FLOOR
+trainWAPFLOOR <- trainWAP[, c(1:312, 315, 316)]
+names(trainWAPFLOOR)
+
+WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
+set.seed(123)
+
+#### 8.2 FLOOR ####
+# Get the best mtry / PREDICTING BUILDING
+#Random Forest
+# Accuracy     Kappa 
+# 0.9000900 0.8600066 
+#Best mtry = 34
+besmtry_rf <- tuneRF(trainWAPFLOOR[WAPS], 
+                     trainWAPFLOOR$FLOOR,
+                     stepFactor = 2, 
+                     improve = TRUE,
+                     trace = TRUE, 
+                     plot = T)
+
+# Train a random forest mtry = 34
+#463 seconds
+system.time(rf_floor <- randomForest(x = trainWAPFLOOR[WAPS],
+                                        y = trainWAPFLOOR$FLOOR,
+                                        data = trainWAPFLOOR, 
+                                        importance = TRUE, 
+                                        do.trace = TRUE, 
+                                        ntree = 100, 
+                                        mtry = 34))
+
+
+# RF - FLOOR Prediction Model:
+RFfloorpred <- predict(rf_floor, validationWAP2)
+
+#Performance
+perfRFfloorpred <- postResample(RFfloorpred, validationWAP2$FLOOR)
+
+#Confusion Matrix
+confusionMatrix(RFfloorpred, validationWAP2$FLOOR)
+
+#### KNN 
+#197 seconds
+# Accuracy     Kappa 
+# 0.7902790 0.7146276 
+
+#STANDARIZE parameters from the dataset
+preprocessKNNfloor <- preProcess(trainWAPFLOOR[WAPS],method = c("center", "scale"))
+preprocessKNNfloorValidation <- preProcess(validationWAP2[WAPS], method = c("center", "scale"))
+
+standarizedfloorWAPStd <- predict(preprocessKNNfloor, trainWAPFLOOR[WAPS])
+standarizedfloorWAPSvd <- predict(preprocessKNNfloorValidation, validationWAP2[WAPS])
+
+standFLOORtd <- cbind(standarizedfloorWAPStd , BUILDINGID =trainWAPFLOOR$BUILDINGID, FLOOR = trainWAPFLOOR$FLOOR)
+standFLOORvd <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID =validationWAP2$BUILDINGID, FLOOR = validationWAP2$FLOOR)
+
+#Train KNN 
+system.time(knn_floor <- train.kknn(FLOOR~.,
+                                       data = standFLOORtd,
+                                       kernel = "optimal",
+                                       kmax = 10,
+                                       scale = FALSE))
+
+# KNN- Building Prediction Model:
+KNNfloorpred <- predict(knn_floor, standFLOORvd)
+
+#Performance
+perfKNNfloorpred <- postResample(KNNfloorpred, standFLOORvd$FLOOR)
+
+#Confusion Matrix
+confusionMatrix(KNNfloorpred, standFLOORvd$FLOOR)
+
+##SVM
+#208 seconds
+# Accuracy     Kappa 
+# 0.8127813 0.7457957 
+system.time(svm_floor<- train(FLOOR~., 
+                                  data = standFLOORtd, 
+                                  method = "svmLinear", 
+                                  trControl = trainControl(verboseIter = TRUE)))
+
+# SVM - Building Prediction Model:
+SVMfloorpred <- predict(svm_floor, standFLOORvd)
+
+#Performance
+perfSVMfloorpred <- postResample(SVMfloorpred, standFLOORvd$FLOOR)
+
+#Confusion Matrix
+confusionMatrix(SVMfloorpred, standFLOORvd$FLOOR)
+
+#SAVE MODEL - RANDOM FOREST SELECTED 
+save(RFfloorpred, file = "RF_PREDICTION_FLOOR.rda")
+
+#### 8.2.2 CREATE NEW VALIDATION DATA SET WITH PREDICTED FLOOR ####
+
+RFfloorpred 
+validationWAP2 <- validationWAP
+validationWAP2$BUILDINGID <-RFbuildingpred
+
+
+### Create new TRAIN DATA FRAME for predicting FLOOR that included BUILDING and FLOOR
+trainWAPFLOOR <- trainWAP[, c(1:312, 315, 316)]
+names(trainWAPFLOOR)
+
+WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
+set.seed(123)
+
+#### 8.3 - LATITUDE ####
 
 
 
