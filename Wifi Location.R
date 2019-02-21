@@ -82,7 +82,7 @@ tdwaps$maxWAP <- apply(tdwaps[WAP], 1, which.max)
 # I am pretty sure NearZeroVariance doesnt go this way
 
 #Validation
-vdwaps[,1:367] <- as.data.frame(apply(vdwaps[, 1:367], 2, function(x) {ifelse(x==100, -100,x)}))
+vdwaps[,1:367] <- as.data.frame(apply(vdwaps[, 1:367], 2, function(x) {ifelse(x==100, -105,x)}))
 WAPvd <- grep("WAP", names(vdwaps), value = T)
 vdwaps$maxWAP <- apply(vdwaps[WAPvd], 1, which.max)
 
@@ -520,7 +520,6 @@ validationWAP3dummified <- validationWAP3[, c(1:313, 316:324)]
 #### 8.3 - LATITUDE ####
 
 #Random Forest
-# Accuracy     Kappa 
 
 #Best mtry = 105
 besmtry_rf <- tuneRF(trainWAPLATITUDERF, 
@@ -548,16 +547,13 @@ perfRFlatitudepred <- postResample(RFlatitutepred, validationwap3RF$LATITUDE)
 
 #### KNN
 
-# Accuracy     Kappa
-
-
 #STANDARIZE parameters from the dataset
 preprocessLatitude <- preProcess(trainWAPLATITUDEdummified, method = "range")
 preprocessLatitudeValidation <- preProcess(validationWAP3dummified, method = "range")
 
 standarizedlatitudeWAPStd <- predict(preprocessLatitude, trainWAPLATITUDEdummified)
 standarizedlatitudeWAPSvd <- predict(preprocessLatitudeValidation, validationWAP3dummified)
-standarizedlatitudeWAPStd[, c(1:314)]
+
 standLATITUDEtd <- cbind(standarizedlatitudeWAPStd,
                          BUILDINGID00 = trainWAPLATITUDEdummified$BUILDINGID_0,
                          BUILDINGID01 = trainWAPLATITUDEdummified$BUILDINGID_1,
@@ -568,8 +564,9 @@ standLATITUDEtd <- cbind(standarizedlatitudeWAPStd,
                          FLOOR3 = trainWAPLATITUDEdummified$FLOOR_3,
                          FLOOR4 = trainWAPLATITUDEdummified$FLOOR_4)
 
-names(standarizedlatitudeWAPSvd)
-standarizedlatitudeWAPSvd[, c(1:314)]
+names(standLATITUDEvd)
+standLATITUDEtd <- standLATITUDEtd[, -c(316:323)]
+
 standLATITUDEvd <- cbind(standarizedlatitudeWAPSvd, 
                          BUILDINGID00 = validationWAP3dummified$BUILDINGID_0,
                          BUILDINGID01 = validationWAP3dummified$BUILDINGID_1,
@@ -579,6 +576,8 @@ standLATITUDEvd <- cbind(standarizedlatitudeWAPSvd,
                          FLOOR2 = validationWAP3dummified$FLOOR_2,
                          FLOOR3 = validationWAP3dummified$FLOOR_3,
                          FLOOR4 = validationWAP3dummified$FLOOR_4)
+standLATITUDEvd <- standLATITUDEvd[, -c(316:323)]
+
 
 #Train KNN
 system.time(knn_latitude <- train.kknn(LATITUDE~.,
@@ -587,29 +586,26 @@ system.time(knn_latitude <- train.kknn(LATITUDE~.,
                                     kmax = 10,
                                     scale = FALSE))
 
+
+
 # KNN- Building Prediction Model:
 KNNlatitudepred <- predict(knn_latitude, standLATITUDEvd)
 
 #Performance 
 perfKNNlatitudepred <- postResample(KNNlatitudepred, standLATITUDEvd$LATITUDE)
 
-# ##SVM
-# #208 seconds
-# # Accuracy     Kappa 
-# # 0.8127813 0.7457957 
-# system.time(svm_floor<- train(FLOOR~., 
-#                               data = standFLOORtd, 
-#                               method = "svmLinear", 
-#                               trControl = trainControl(verboseIter = TRUE)))
-# 
-# # SVM - Building Prediction Model:
-# SVMfloorpred <- predict(svm_floor, standFLOORvd)
-# 
-# #Performance
-# perfSVMfloorpred <- postResample(SVMfloorpred, standFLOORvd$FLOOR)
-# 
-# #Confusion Matrix
-# confusionMatrix(SVMfloorpred, standFLOORvd$FLOOR)
-# 
-# 
-# 
+##SVM
+
+system.time(svm_latitude<- train(LATITUDE~.,
+                              data = standLATITUDEtd,
+                              method = "svmLinear",
+                              trControl = trainControl(verboseIter = TRUE)))
+
+# SVM - Building Prediction Model:
+SVMlatitudepred <- predict(svm_latitude, standLAATITUDEvd)
+
+#Performance
+perfSVMlatitudepred <- postResample(SVMlatitudepred, standLATITUDEvd$LATITUDE)
+
+
+
