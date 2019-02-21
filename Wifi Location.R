@@ -501,6 +501,7 @@ dummyFloor <- dummy(trainWAPLATITUDE$FLOOR, sep = "_")
 trainWAPLATITUDE <- cbind(trainWAPLATITUDE, dummyFloor)
 trainWAPLATITUDERF <- trainWAPLATITUDE[, c(1:316)]
 trainWAPLATITUDEdummified <- trainWAPLATITUDE[, c(1:313, 316:324)]
+trainWAPLATITUDEdummified$maxWAP <- as.numeric(trainWAPLATITUDEdummified$maxWAP)
 
 #Validation
 dummyBuildvalidation <- dummy(validationWAP3$BUILDINGID, sep = "_")
@@ -512,7 +513,9 @@ validationwap3RF <- validationWAP3[, c(1:315, 340)]
 names(validationwap3RF)
 validationWAP3dummified <- validationWAP3[, c(1:312, 315:340)]
 validationWAP3dummified <- validationWAP3dummified[, -c(322:337)]
-names(validationWAP3dummified)
+validationWAP3dummified <- validationWAP3dummified[, c(1:312, 322, 313:321)]
+validationWAP3dummified$maxWAP <- as.numeric(validationWAP3dummified$maxWAP)
+
 
 #### 8.3 - LATITUDE ####
 
@@ -543,37 +546,50 @@ RFlatitutepred <- predict(rf_latitude, validationwap3RF)
 #Performance
 perfRFlatitudepred <- postResample(RFlatitutepred, validationwap3RF$LATITUDE)
 
-# #### KNN 
-# #197 seconds
-# # Accuracy     Kappa 
-# 
-# 
-# #STANDARIZE parameters from the dataset
-# preprocessKNNfloor <- preProcess(trainWAPFLOOR[WAPSFLOOR],method = c("center", "scale"))
-# preprocessKNNfloorValidation <- preProcess(validationWAP2[WAPSFLOOR], method = c("center", "scale"))
-# 
-# standarizedfloorWAPStd <- predict(preprocessKNNfloor, trainWAPFLOOR[WAPSFLOOR])
-# standarizedfloorWAPSvd <- predict(preprocessKNNfloorValidation, validationWAP2[WAPSFLOOR])
-# 
-# standFLOORtd <- cbind(standarizedfloorWAPStd , BUILDINGID = trainWAPFLOOR$BUILDINGID, FLOOR = trainWAPFLOOR$FLOOR)
-# standFLOORvd <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID = validationWAP2$BUILDINGID, FLOOR = validationWAP2$FLOOR)
-# 
-# #Train KNN 
-# system.time(knn_floor <- train.kknn(FLOOR~.,
-#                                     data = standFLOORtd,
-#                                     kernel = "optimal",
-#                                     kmax = 10,
-#                                     scale = FALSE))
-# 
-# # KNN- Building Prediction Model:
-# KNNfloorpred <- predict(knn_floor, standFLOORvd)
-# 
-# #Performance
-# perfKNNfloorpred <- postResample(KNNfloorpred, standFLOORvd$FLOOR)
-# 
-# #Confusion Matrix
-# confusionMatrix(KNNfloorpred, standFLOORvd$FLOOR)
-# 
+#### KNN
+
+# Accuracy     Kappa
+
+
+#STANDARIZE parameters from the dataset
+preprocessLatitude <- preProcess(trainWAPLATITUDEdummified, method = "range")
+preprocessLatitudeValidation <- preProcess(validationWAP3dummified, method = "range")
+
+standarizedlatitudeWAPStd <- predict(preprocessLatitude, trainWAPLATITUDEdummified)
+standarizedlatitudeWAPSvd <- predict(preprocessLatitudeValidation, validationWAP3dummified)
+
+standLATITUDEtd <- cbind(standarizedlatitudeWAPStd, BUILDINGID00 = trainWAPLATITUDEdummified$BUILDINGID_0,
+                         BUILDINGID01 = trainWAPLATITUDEdummified$BUILDINGID_1,
+                         BUILDINGID02 = trainWAPLATITUDEdummified$BUILDINGID_2,
+                         FLOOR0 = trainWAPLATITUDEdummified$FLOOR_0,
+                         FLOOR1 = trainWAPLATITUDEdummified$FLOOR_1,
+                         FLOOR2 = trainWAPLATITUDEdummified$FLOOR_2,
+                         FLOOR3 = trainWAPLATITUDEdummified$FLOOR_3,
+                         FLOOR4 = trainWAPLATITUDEdummified$FLOOR_4)
+
+standLATITUDEvd <- cbind(standarizedlatitudeWAPSvd, 
+                         BUILDINGID00 = validationWAP3dummified$BUILDINGID_0,
+                         BUILDINGID01 = validationWAP3dummified$BUILDINGID_1,
+                         BUILDINGID02 = validationWAP3dummified$BUILDINGID_2,
+                         FLOOR0 = validationWAP3dummified$FLOOR_0,
+                         FLOOR1 = validationWAP3dummified$FLOOR_1,
+                         FLOOR2 = validationWAP3dummified$FLOOR_2,
+                         FLOOR3 = validationWAP3dummified$FLOOR_3,
+                         FLOOR4 = validationWAP3dummified$FLOOR_4)
+
+#Train KNN
+system.time(knn_latitude <- train.kknn(LATITUDE~.,
+                                    data = standLATITUDEtd,
+                                    kernel = "optimal",
+                                    kmax = 10,
+                                    scale = FALSE))
+
+# KNN- Building Prediction Model:
+KNNlatitudepred <- predict(knn_latitude, standLATITUDEvd)
+
+#Performance
+perfKNNlatitudepred <- postResample(KNNlatitudepred, standLATITUDEvd$LATITUDE)
+
 # ##SVM
 # #208 seconds
 # # Accuracy     Kappa 
