@@ -478,20 +478,15 @@ save(RFfloorpred, file = "RF_PREDICTION_FLOOR.rda")
 #### 8.2.2 CREATE NEW VALIDATION DATA SET WITH PREDICTED FLOOR ####
 
 RFfloorpred 
-validationWAP3 <- validationWAP
+validationWAP3 <- validationWAP2
 validationWAP3$LATITUDE <- validationWAP$LATITUDE
 validationWAP3$FLOOR <- RFfloorpred
-validationWAP3$BUILDINGID <- RFbuildingpred
-validationWAP3 <- validationWAP3[, - c(313)]
 names(validationWAP3)
-
+validationWAP3 <- validationWAP3[, c(1:312, 316, 313, 314, 315)]
 
 ### Create new TRAIN DATA FRAME for predicting FLOOR that included BUILDING and FLOOR
-trainWAPLATITUDE <- trainWAP[, -c(313)]
+trainWAPLATITUDE <- trainWAP[,c(-313)]
 names(trainWAPLATITUDE)
-
-WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
-set.seed(123)
 
 #Dummify Building and Floor variables
 #Train
@@ -502,19 +497,24 @@ trainWAPLATITUDE <- cbind(trainWAPLATITUDE, dummyFloor)
 trainWAPLATITUDERF <- trainWAPLATITUDE[, c(1:316)]
 trainWAPLATITUDEdummified <- trainWAPLATITUDE[, c(1:313, 316:324)]
 trainWAPLATITUDEdummified$maxWAP <- as.numeric(trainWAPLATITUDEdummified$maxWAP)
+names(trainWAPLATITUDERF)
 
 #Validation
+
+# dummyBuildvalidation <- NULL
+# dummyFloorvalidation<- NULL
+# validationWAP3dummy <- NULL
+# validationwap3RF <- NULL
+# validationWAP3dummified <- NULL
+# 
 dummyBuildvalidation <- dummy(validationWAP3$BUILDINGID, sep = "_")
 validationWAP3 <- cbind(validationWAP3, dummyBuildvalidation)
 dummyFloorvalidation <- dummy(validationWAP3$FLOOR, sep = "_")
 validationWAP3 <- cbind(validationWAP3, dummyFloorvalidation)
 names(validationWAP3)
-validationwap3RF <- validationWAP3[, c(1:315, 340)]
+validationwap3RF <- validationWAP3[, c(1:316)]
 names(validationwap3RF)
-validationWAP3dummified <- validationWAP3[, c(1:312, 315:340)]
-validationWAP3dummified <- validationWAP3dummified[, -c(322:337)]
-validationWAP3dummified <- validationWAP3dummified[, c(1:312, 322, 313:321)]
-validationWAP3dummified$maxWAP <- as.numeric(validationWAP3dummified$maxWAP)
+validationWAP3dummified <- validationWAP3[, c(1:313, 316:324)]
 
 
 #### 8.3 - LATITUDE ####
@@ -532,7 +532,7 @@ besmtry_rf <- tuneRF(trainWAPLATITUDERF,
 
 # Train a random forest mtry = 105
 #463 seconds
-system.time(rf_latitude <- randomForest(x = trainWAPLATITUDERF,
+system.time(rf_latitude <- randomForest(x = trainWAPLATITUDERF[, -c(313)],
                                      y = trainWAPLATITUDERF$LATITUDE,
                                      importance = TRUE, 
                                      do.trace = TRUE, 
@@ -557,8 +557,9 @@ preprocessLatitudeValidation <- preProcess(validationWAP3dummified, method = "ra
 
 standarizedlatitudeWAPStd <- predict(preprocessLatitude, trainWAPLATITUDEdummified)
 standarizedlatitudeWAPSvd <- predict(preprocessLatitudeValidation, validationWAP3dummified)
-
-standLATITUDEtd <- cbind(standarizedlatitudeWAPStd, BUILDINGID00 = trainWAPLATITUDEdummified$BUILDINGID_0,
+standarizedlatitudeWAPStd[, c(1:314)]
+standLATITUDEtd <- cbind(standarizedlatitudeWAPStd,
+                         BUILDINGID00 = trainWAPLATITUDEdummified$BUILDINGID_0,
                          BUILDINGID01 = trainWAPLATITUDEdummified$BUILDINGID_1,
                          BUILDINGID02 = trainWAPLATITUDEdummified$BUILDINGID_2,
                          FLOOR0 = trainWAPLATITUDEdummified$FLOOR_0,
@@ -567,6 +568,8 @@ standLATITUDEtd <- cbind(standarizedlatitudeWAPStd, BUILDINGID00 = trainWAPLATIT
                          FLOOR3 = trainWAPLATITUDEdummified$FLOOR_3,
                          FLOOR4 = trainWAPLATITUDEdummified$FLOOR_4)
 
+names(standarizedlatitudeWAPSvd)
+standarizedlatitudeWAPSvd[, c(1:314)]
 standLATITUDEvd <- cbind(standarizedlatitudeWAPSvd, 
                          BUILDINGID00 = validationWAP3dummified$BUILDINGID_0,
                          BUILDINGID01 = validationWAP3dummified$BUILDINGID_1,
@@ -587,7 +590,7 @@ system.time(knn_latitude <- train.kknn(LATITUDE~.,
 # KNN- Building Prediction Model:
 KNNlatitudepred <- predict(knn_latitude, standLATITUDEvd)
 
-#Performance
+#Performance 
 perfKNNlatitudepred <- postResample(KNNlatitudepred, standLATITUDEvd$LATITUDE)
 
 # ##SVM
