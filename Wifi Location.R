@@ -19,7 +19,7 @@ pacman:: p_load(pacman,
                 kknn,
                 gbts,
                 Metrics,
-                dummyVars
+                dummies
 )
 ####Parallel processing####
 # getDoParWorkers()
@@ -34,7 +34,7 @@ vd <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc
 
 #### 2.1- Deleting WAPS that are useless (=100) ####
 
-#Test
+#Train
 notworking_waps <- which(apply(td [,1:520], 2, function(x) mean(x)) == 100)
 notworking_row <- which(apply(td [,1:520], 1, function(x) mean(x)) == 100)
 tdwaps <- td [-c(notworking_row), -c(notworking_waps)]
@@ -87,7 +87,7 @@ WAPvd <- grep("WAP", names(vdwaps), value = T)
 vdwaps$maxWAP <- apply(vdwaps[WAPvd], 1, which.max)
 
 
-## Intercept
+## Intersect
 trainwaps <- tdwaps[, 1:465]
 validationwaps <- vdwaps[, 1:367]
 traininfo <- tdwaps[, 466:475]
@@ -308,10 +308,9 @@ besmtry_rf <- tuneRF(trainWAP[WAPS],
 #142 seconds
 system.time(rf_building <- randomForest(x = trainWAP[WAPS],
                                         y = trainWAP$BUILDINGID,
-                                        data = trainWAP, 
                                         importance = TRUE, 
                                         do.trace = TRUE, 
-                                        ntree = 20, 
+                                        ntree = 200, 
                                         mtry = 9))
 
 
@@ -343,7 +342,7 @@ standKNNbldgVD <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID =validationWAP$BUIL
 system.time(knn_building <- train.kknn(BUILDINGID~.,
                                        data = standKNNbldgTD,
                                        kernel = "optimal",
-                                       kmax = 10,
+                                       kmax = 9,
                                        scale = FALSE))
 
 # KNN- Building Prediction Model:
@@ -479,8 +478,10 @@ save(RFfloorpred, file = "RF_PREDICTION_FLOOR.rda")
 #### 8.2.2 CREATE NEW VALIDATION DATA SET WITH PREDICTED FLOOR ####
 
 RFfloorpred 
-validationWAP3 <- validationWAP2
+validationWAP3 <- validationWAP
+validationWAP3$LATITUDE <- validationWAP$LATITUDE
 validationWAP3$FLOOR <- RFfloorpred
+validationWAP3$BUILDINGID <- RFbuildingpred
 validationWAP3 <- validationWAP3[, - c(313)]
 names(validationWAP3)
 
@@ -492,9 +493,104 @@ names(trainWAPLATITUDE)
 WAPS <- grep("WAP", names(trainWAPFLOOR), value = T)
 set.seed(123)
 
+#Dummify Building and Floor variables
+#Train
+dummyBuild <- dummy(trainWAPLATITUDE$BUILDINGID, sep = "_")
+trainWAPLATITUDE <- cbind(trainWAPLATITUDE, dummyBuild)
+dummyFloor <- dummy(trainWAPLATITUDE$FLOOR, sep = "_")
+trainWAPLATITUDE <- cbind(trainWAPLATITUDE, dummyFloor)
+trainWAPLATITUDERF <- trainWAPLATITUDE[, c(1:316)]
+trainWAPLATITUDEdummified <- trainWAPLATITUDE[, c(1:313, 316:324)]
+
+#Validation
+dummyBuildvalidation <- dummy(validationWAP3$BUILDINGID, sep = "_")
+validationWAP3 <- cbind(validationWAP3, dummyBuildvalidation)
+dummyFloorvalidation <- dummy(validationWAP3$FLOOR, sep = "_")
+validationWAP3 <- cbind(validationWAP3, dummyFloorvalidation)
+names(validationWAP3)
+validationwap3RF <- validationWAP3[, c(1:315, 340)]
+names(validationwap3RF)
+validationWAP3dummified <- validationWAP3[, c(1:312, 315:340)]
+validationWAP3dummified <- validationWAP3dummified[, -c(322:337)]
+names(validationWAP3dummified)
+
 #### 8.3 - LATITUDE ####
 
+#Random Forest
+# Accuracy     Kappa 
+
+#Best mtry = 105
+besmtry_rf <- tuneRF(trainWAPLATITUDERF, 
+                     trainWAPLATITUDERF$LATITUDE,
+                     stepFactor = 2, 
+                     improve = TRUE,
+                     trace = TRUE, 
+                     plot = T)
+
+# Train a random forest mtry = 105
+#463 seconds
+system.time(rf_latitude <- randomForest(x = trainWAPLATITUDERF,
+                                     y = trainWAPLATITUDERF$LATITUDE,
+                                     importance = TRUE, 
+                                     do.trace = TRUE, 
+                                     ntree = 100, 
+                                     mtry = 105))
 
 
+# RF - FLOOR Prediction Model:
+RFlatitutepred <- predict(rf_latitude, validationwap3RF)
 
+#Performance
+perfRFlatitudepred <- postResample(RFlatitutepred, validationwap3RF$LATITUDE)
 
+# #### KNN 
+# #197 seconds
+# # Accuracy     Kappa 
+# 
+# 
+# #STANDARIZE parameters from the dataset
+# preprocessKNNfloor <- preProcess(trainWAPFLOOR[WAPSFLOOR],method = c("center", "scale"))
+# preprocessKNNfloorValidation <- preProcess(validationWAP2[WAPSFLOOR], method = c("center", "scale"))
+# 
+# standarizedfloorWAPStd <- predict(preprocessKNNfloor, trainWAPFLOOR[WAPSFLOOR])
+# standarizedfloorWAPSvd <- predict(preprocessKNNfloorValidation, validationWAP2[WAPSFLOOR])
+# 
+# standFLOORtd <- cbind(standarizedfloorWAPStd , BUILDINGID = trainWAPFLOOR$BUILDINGID, FLOOR = trainWAPFLOOR$FLOOR)
+# standFLOORvd <- cbind(standarizedKNNbldgWAPSvd, BUILDINGID = validationWAP2$BUILDINGID, FLOOR = validationWAP2$FLOOR)
+# 
+# #Train KNN 
+# system.time(knn_floor <- train.kknn(FLOOR~.,
+#                                     data = standFLOORtd,
+#                                     kernel = "optimal",
+#                                     kmax = 10,
+#                                     scale = FALSE))
+# 
+# # KNN- Building Prediction Model:
+# KNNfloorpred <- predict(knn_floor, standFLOORvd)
+# 
+# #Performance
+# perfKNNfloorpred <- postResample(KNNfloorpred, standFLOORvd$FLOOR)
+# 
+# #Confusion Matrix
+# confusionMatrix(KNNfloorpred, standFLOORvd$FLOOR)
+# 
+# ##SVM
+# #208 seconds
+# # Accuracy     Kappa 
+# # 0.8127813 0.7457957 
+# system.time(svm_floor<- train(FLOOR~., 
+#                               data = standFLOORtd, 
+#                               method = "svmLinear", 
+#                               trControl = trainControl(verboseIter = TRUE)))
+# 
+# # SVM - Building Prediction Model:
+# SVMfloorpred <- predict(svm_floor, standFLOORvd)
+# 
+# #Performance
+# perfSVMfloorpred <- postResample(SVMfloorpred, standFLOORvd$FLOOR)
+# 
+# #Confusion Matrix
+# confusionMatrix(SVMfloorpred, standFLOORvd$FLOOR)
+# 
+# 
+# 
