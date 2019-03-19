@@ -1,5 +1,7 @@
 #### 1- Setting up the R environement ####
 
+library(readr)
+
 pacman:: p_load(pacman,
                 readr,
                 tidyr,
@@ -28,8 +30,8 @@ registerDoMC(cores=4)
 
 #### 2- Load Data Sets ####
 
-td <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/trainingData.csv")
-vd <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/validationData.csv")
+td <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/trainingData.csv") # you need to fix this path
+vd <- read_csv("~/Desktop/Ubiqum/Data Analysis/RStudio/Wifi Location/UJIndoorLoc/validationData.csv") # you need to fix this path
 
 
 #### 2.1- Deleting WAPS that are useless (=100) ####
@@ -45,7 +47,7 @@ vdwaps <- vd [, -c(validation_notworking_waps)]
 
 #### 3- Convert Variables #### 
 
-#Test
+#Test # try to create a loop or apply to fix this!
 tdwaps$FLOOR <- as.factor(tdwaps$FLOOR)
 tdwaps$BUILDINGID <- as.factor(tdwaps$BUILDINGID)
 tdwaps$SPACEID <- as.factor(tdwaps$SPACEID)
@@ -153,7 +155,7 @@ plot(closewaps_bld2$LATITUDE, closewaps_bld2$LONGITUDE)
 
 #### 5.3- Break it dowm per floor (0,1,2,3,4) ####
 
-#Floor 0
+#Floor 0 #do a loop to save these data frames! The easiest way is to store it in a list. 
 closewaps_bld0_fl0 <- filter(closewaps_bld0, FLOOR == 0)
 plot(closewaps_bld0_fl0$LATITUDE, closewaps_bld0_fl0$LONGITUDE)
 
